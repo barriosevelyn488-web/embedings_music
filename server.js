@@ -18,10 +18,29 @@ const MIME_TYPES = {
   ".ico": "image/x-icon",
 };
 
+const ORIGENES_LOCALES_PERMITIDOS = new Set([
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+]);
+
 const server = http.createServer(async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  const origin = req.headers.origin;
+  if (origin && ORIGENES_LOCALES_PERMITIDOS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  }
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    return res.end();
+  }
 
   const urlObj = new URL(req.url, `http://localhost:${PORT}`);
   const ruta = urlObj.pathname;

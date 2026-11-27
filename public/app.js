@@ -179,6 +179,29 @@ function renderizarInspectorVectorial(info) {
   }
 }
 
+const ES_LIVE_SERVER_ESTATICO =
+  (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") &&
+  window.location.port &&
+  window.location.port !== "3000";
+
+const API_BASE = ES_LIVE_SERVER_ESTATICO ? "http://localhost:3000" : "";
+
+async function leerRespuestaJSON(resp) {
+  const texto = await resp.text();
+  if (!texto) {
+    throw new Error(
+      "El servidor Node + SQLite no respondió. Ejecuta «npm start» en la terminal y abre http://localhost:3000 (en lugar de solo Live Server)."
+    );
+  }
+  try {
+    return JSON.parse(texto);
+  } catch {
+    throw new Error(
+      "Respuesta no válida del servidor. Verifica que «npm start» esté activo en http://localhost:3000."
+    );
+  }
+}
+
 async function cargarCatalogoSQLite() {
   ocultarAlerta();
   estado.modoResultadosSemantica = false;
@@ -187,8 +210,8 @@ async function cargarCatalogoSQLite() {
 
   try {
     const params = new URLSearchParams({ categoria: estado.categoriaActiva });
-    const resp = await fetch(`/api/songs?${params.toString()}`);
-    const data = await resp.json();
+    const resp = await fetch(`${API_BASE}/api/songs?${params.toString()}`);
+    const data = await leerRespuestaJSON(resp);
 
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || "No se pudo consultar la base SQLite.");
@@ -215,8 +238,13 @@ async function cargarCatalogoSQLite() {
     renderizarCanciones(data.canciones, { mostrarSimilitud: false });
   } catch (err) {
     el.statusBadge.className = "status-badge is-warn";
-    el.statusText.textContent = "Error al conectar con SQLite";
-    mostrarAlerta("No se pudo cargar el catálogo", err.message);
+    el.statusText.textContent = "Inicia el servidor con: npm start";
+    mostrarAlerta(
+      "Falta encender el servidor Node + SQLite",
+      err.message.includes("Failed to fetch")
+        ? "Estás abriendo el HTML estático sin el backend activo. Corre «npm start» en la terminal y entra a http://localhost:3000."
+        : err.message
+    );
   }
 }
 
@@ -231,7 +259,7 @@ async function ejecutarBusquedaSemantica(consultaTexto) {
   el.submitBtnLabel.textContent = "Consultando...";
 
   try {
-    const resp = await fetch("/api/search", {
+    const resp = await fetch(`${API_BASE}/api/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -240,7 +268,7 @@ async function ejecutarBusquedaSemantica(consultaTexto) {
       }),
     });
 
-    const data = await resp.json();
+    const data = await leerRespuestaJSON(resp);
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || "Ocurrió un error al procesar la búsqueda semántica.");
     }
