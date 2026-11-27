@@ -1,28 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 import { consultarCancionesSQLite } from "./db.js";
 
-/**
- * Obtiene e inicializa el cliente de Gemini validando que GEMINI_API_KEY exista en el entorno (.env o Vercel).
- */
 export function obtenerClienteGemini() {
   const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey || apiKey.includes("pega_aqui")) {
-    const error = new Error(
-      "Falta configurar tu GEMINI_API_KEY en el archivo .env (o en Environment Variables de Vercel)."
-    );
+    const error = new Error("Configura tu GEMINI_API_KEY en el archivo .env para activar las funciones inteligentes.");
     error.codigoEstado = 400;
     throw error;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: { retryOptions: { attempts: 1 } },
+  });
 }
 
-// ============================================================================
-// AJUSTE 1: TRANSFORMACIÓN DE LENGUAJE NATURAL A VECTOR NUMÉRICO Y SIMILITUD
-// ============================================================================
-
 /**
- * Convierte cualquier texto en lenguaje natural en el vector numérico (Embedding de 3,072 dimensiones)
- * que comprende el modelo semántico Gemini Embedding 2.
+ * Transforma texto en lenguaje natural a su representación vectorial numérica (Embedding).
  */
 export async function crearEmbedding(texto, clienteOpcional = null) {
   const client = clienteOpcional || obtenerClienteGemini();
@@ -37,7 +30,7 @@ export async function crearEmbedding(texto, clienteOpcional = null) {
     } catch (err) {
       ultimoError = err;
       if (intento < 3) {
-        await new Promise((r) => setTimeout(r, 600 * intento));
+        await new Promise((r) => setTimeout(r, 500 * intento));
       }
     }
   }
@@ -45,69 +38,163 @@ export async function crearEmbedding(texto, clienteOpcional = null) {
 }
 
 /**
- * Similitud de Coseno: compara geométricamente dos vectores numéricos (de -1 a 1)
- * midiendo qué tan cercano es el significado entre la consulta del usuario y cada canción en SQLite.
+ * Similitud de coseno entre dos vectores numéricos.
  */
 export function calcularSimilitud(vectorA, vectorB) {
   let productoPunto = 0;
   let magnitudA = 0;
   let magnitudB = 0;
 
-  const longitud = Math.min(vectorA.length, vectorB.length);
-  for (let i = 0; i < longitud; i++) {
+  const n = Math.min(vectorA.length, vectorB.length);
+  for (let i = 0; i < n; i++) {
     productoPunto += vectorA[i] * vectorB[i];
     magnitudA += vectorA[i] * vectorA[i];
     magnitudB += vectorB[i] * vectorB[i];
   }
 
-  const denominador = Math.sqrt(magnitudA) * Math.sqrt(magnitudB);
-  return denominador === 0 ? 0 : productoPunto / denominador;
+  const denom = Math.sqrt(magnitudA) * Math.sqrt(magnitudB);
+  return denom === 0 ? 0 : productoPunto / denom;
+}
+
+function normalizarTexto(str) {
+  return String(str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 // ============================================================================
-// AJUSTE 2: INSTRUCCIONES Y RESPUESTA DE LA IA ORIENTADA A TEMÁTICA MUSICAL
+// 1. BUSCADOR MUSICAL SEMÁNTICO (INDEPENDIENTE DEL CHAT)
 // ============================================================================
 
-const INSTRUCCIONES_MUSICA_IA = `
-Eres un curador musical experto y amable integrado en un buscador vectorial de música.
-Reglas obligatorias:
-1. Responde siempre en español con un tono cercano, claro y apasionado por la música.
-2. Recomienda ÚNICAMENTE canciones y artistas presentes en el CONTEXTO MUSICAL recuperado de nuestra base SQLite.
-3. Explica brevemente en 2 a 4 oraciones por qué la canción o canciones principales conectan con el ánimo, género, artista o tema que buscó la persona.
-4. Si ninguna canción del contexto se relaciona con lo pedido, indícalo con honestidad y sugiere la opción más cercana disponible en el catálogo.
+/**
+ * Busca canciones por género, canción, artista o descripción emocional/natural
+ * combinando coincidencia directa y similitud semántica vectorial sobre SQLite.
+ */
+export async function buscarCancionesSemanticamente({ consultaUsuario, categoria = "Todas", limite = 12 }) {
+  const client = obtenerClienteGemini();
+  const vectorConsulta = await crearEmbedding(
+    `task: question answering | query: ${consultaUsuario}`,
+    client
+  );
+
+  const { canciones } = await consultarCancionesSQLite({
+    categoria,
+    incluirVectores: true,
+  });
+
+  const qNorm = normalizarTexto(consultaUsuario);
+
+  const puntuadas = canciones.map((cancion) => {
+    const similitudBase = calcularSimilitud(vectorConsulta, cancion.vector);
+    let puntajeFinal = similitudBase;
+
+    // Refuerzo cuando el usuario escribe directamente el título, artista o género
+    const tituloNorm = normalizarTexto(cancion.titulo);
+    const artistaNorm = normalizarTexto(cancion.artista);
+    const catNorm = normalizarTexto(cancion.categoria);
+
+    if (tituloNorm.includes(qNorm) || artistaNorm.includes(qNorm)) {
+      puntajeFinal = Math.min(0.99, similitudBase + 0.22);
+    } else if (catNorm.includes(qNorm)) {
+      puntajeFinal = Math.min(0.95, similitudBase + 0.12);
+    }
+
+    const { vector, ...datosPublicos } = cancion;
+    return {
+      ...datosPublicos,
+      afinidad: Math.round(puntajeFinal * 100),
+      puntajeInterno: puntajeFinal,
+    };
+  });
+
+  return puntuadas
+    .sort((a, b) => b.puntajeInterno - a.puntajeInterno)
+    .slice(0, limite)
+    .map(({ puntajeInterno, ...resto }) => resto);
+}
+
+// ============================================================================
+// 2. CHAT CON AVATAR MUSICAL IA ("LIRA") — INDEPENDIENTE DEL BUSCADOR
+// ============================================================================
+
+const INSTRUCCIONES_AVATAR_MUSICAL = `
+Eres Lira, la guía y compañera musical dentro de una aplicación para descubrir y disfrutar música.
+Reglas de estilo y comportamiento:
+1. Habla siempre en español de forma cálida, natural, breve y enfocada en el oyente (nunca hables de vectores, embeddings, bases de datos ni SQLite).
+2. Usa el CATÁLOGO RELACIONADO para responder dudas sobre letras, de qué trata una canción, datos del artista o recomendar temas según el ánimo de la persona.
+3. Si mencionas canciones de la app, escribe su título entre comillas y el artista para que la persona las ubique fácilmente y pueda reproducir su video o ver su letra.
+4. Mantén tus respuestas ágiles (máximo 1 o 2 párrafos cortos).
 `.trim();
 
-/**
- * Genera la recomendación conversacional usando el contexto recuperado por similitud semántica desde SQLite.
- */
-export async function generarRespuestaMusicalIA({ consultaUsuario, categoria, mejoresCanciones, client }) {
-  const resumenContexto = mejoresCanciones
-    .slice(0, 3)
+export async function conversarConAvatarMusical({ mensajeUsuario, historial = [] }) {
+  const client = obtenerClienteGemini();
+  const vectorPregunta = await crearEmbedding(
+    `task: question answering | query: ${mensajeUsuario}`,
+    client
+  );
+
+  const { canciones } = await consultarCancionesSQLite({
+    categoria: "Todas",
+    incluirVectores: true,
+  });
+
+  const qNorm = normalizarTexto(mensajeUsuario);
+  const cercanas = canciones
+    .map((c) => {
+      let score = calcularSimilitud(vectorPregunta, c.vector);
+      if (normalizarTexto(c.titulo).includes(qNorm) || normalizarTexto(c.artista).includes(qNorm)) {
+        score += 0.25;
+      }
+      return { ...c, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+
+  const contextoCanciones = cercanas
     .map(
-      (c, idx) =>
-        `${idx + 1}. "${c.titulo}" de ${c.artista} (${c.anio}) [${c.categoria}] — Similitud semántica: ${c.porcentajeSimilitud}% | Ambiente: ${c.mood} | Detalle: ${c.descripcion}`
+      (c) =>
+        `- "${c.titulo}" de ${c.artista} (${c.anio}, género: ${c.categoria}). Tema/ambiente: ${c.descripcion} | Fragmento de letra: ${(c.letra || "").slice(0, 280).replace(/\s+/g, " ")}`
     )
     .join("\n");
 
-  const promptEntrada = [
-    `FILTRO DE CATEGORÍA ACTIVO: ${categoria || "Todas"}`,
-    `CONTEXTO MUSICAL (mejores coincidencias vectoriales en SQLite):\n${resumenContexto}`,
-    `CONSULTA DEL USUARIO: ${consultaUsuario}`,
-  ].join("\n\n");
+  const resumenHistorial = Array.isArray(historial)
+    ? historial
+        .slice(-4)
+        .map((m) => `${m.rol === "usuario" ? "Oyente" : "Lira"}: ${String(m.texto || "").slice(0, 220)}`)
+        .join("\n")
+    : "";
 
-  const modelosRespaldo = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-4-hydrogen"];
+  const entrada = [
+    resumenHistorial ? `CONVERSACIÓN RECIENTE:\n${resumenHistorial}` : "",
+    `CATÁLOGO RELACIONADO EN LA APP:\n${contextoCanciones}`,
+    `MENSAJE DEL OYENTE: ${mensajeUsuario}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const modelos = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
   let ultimoError = null;
 
-  for (const modelo of modelosRespaldo) {
+  for (const modelo of modelos) {
     try {
       const interaction = await client.interactions.create({
         model: modelo,
-        system_instruction: INSTRUCCIONES_MUSICA_IA,
-        input: promptEntrada,
+        system_instruction: INSTRUCCIONES_AVATAR_MUSICAL,
+        input: entrada,
       });
+
+      const sugerencias = cercanas.slice(0, 2).map((c) => ({
+        id: c.id,
+        titulo: c.titulo,
+        artista: c.artista,
+        categoria: c.categoria,
+        portada: c.portada,
+      }));
+
       return {
-        texto: interaction.output_text,
-        modeloUsado: modelo,
+        respuesta: interaction.output_text,
+        sugerencias,
       };
     } catch (err) {
       ultimoError = err;
@@ -118,71 +205,4 @@ export async function generarRespuestaMusicalIA({ consultaUsuario, categoria, me
   }
 
   throw ultimoError;
-}
-
-/**
- * Flujo completo de búsqueda semántica musical:
- * 1) Transforma la consulta en lenguaje natural a vector numérico (Embedding).
- * 2) Filtra por categoría en SQLite y calcula la similitud de coseno contra cada vector musical.
- * 3) Genera la recomendación musical personalizada con Gemini.
- */
-export async function buscarMusicaConEmbeddings({ consultaUsuario, categoria = "Todas", limite = 6 }) {
-  const client = obtenerClienteGemini();
-  const inicioTotal = performance.now();
-
-  const textoTransformado = `task: question answering | query: ${consultaUsuario}`;
-  const vectorConsulta = await crearEmbedding(textoTransformado, client);
-
-  const inicioSQLite = performance.now();
-  const { motor, canciones } = await consultarCancionesSQLite({
-    categoria,
-    incluirVectores: true,
-  });
-
-  const resultadosOrdenados = canciones
-    .map((cancion) => {
-      const similitud = calcularSimilitud(vectorConsulta, cancion.vector);
-      return {
-        id: cancion.id,
-        titulo: cancion.titulo,
-        artista: cancion.artista,
-        categoria: cancion.categoria,
-        anio: cancion.anio,
-        mood: cancion.mood,
-        descripcion: cancion.descripcion,
-        similitud,
-        porcentajeSimilitud: Number((similitud * 100).toFixed(2)),
-      };
-    })
-    .sort((a, b) => b.similitud - a.similitud)
-    .slice(0, limite);
-
-  const tiempoBusquedaVectorialMs = Number((performance.now() - inicioSQLite).toFixed(2));
-
-  const respuestaIA = await generarRespuestaMusicalIA({
-    consultaUsuario,
-    categoria,
-    mejoresCanciones: resultadosOrdenados,
-    client,
-  });
-
-  const tiempoTotalMs = Number((performance.now() - inicioTotal).toFixed(0));
-
-  return {
-    consulta: consultaUsuario,
-    categoriaActiva: categoria,
-    motorBaseDatos: motor,
-    transformacionEmbedding: {
-      modeloEmbedding: "gemini-embedding-2",
-      textoEntrada: textoTransformado,
-      dimensiones: vectorConsulta.length,
-      muestraVector: vectorConsulta.slice(0, 8).map((v) => Number(v.toFixed(6))),
-      tiempoSQLiteMs: tiempoBusquedaVectorialMs,
-      totalComparadas: canciones.length,
-    },
-    respuestaIA: respuestaIA.texto,
-    modeloGeneracion: respuestaIA.modeloUsado,
-    tiempoTotalMs,
-    resultados: resultadosOrdenados,
-  };
 }

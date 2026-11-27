@@ -7,25 +7,44 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const RUTA_SQLITE = path.join(__dirname, "..", "data", "music.sqlite");
 export const RUTA_CACHE_JSON = path.join(__dirname, "..", "data", "vectors-cache.json");
 
-/**
- * Convierte un arreglo numérico JS en un Buffer binario Float32 compacto para SQLite BLOB.
- */
 function vectorABlob(valores) {
   const float32 = new Float32Array(valores);
   return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
 }
 
-/**
- * Reconstruye un Float32Array desde el BLOB almacenado en SQLite.
- */
 function blobAVector(blobUint8) {
   const copia = Uint8Array.from(blobUint8);
   return new Float32Array(copia.buffer);
 }
 
+function mapearFilaCancion(fila, incluirVectores = false) {
+  const cancion = {
+    id: fila.id,
+    titulo: fila.titulo,
+    artista: fila.artista,
+    categoria: fila.categoria,
+    anio: fila.anio,
+    portada: fila.portada,
+    youtubeId: fila.youtube_id ?? fila.youtubeId,
+    letra: fila.letra,
+    mood: fila.mood,
+    descripcion: fila.descripcion,
+    reproducciones: Number(fila.reproducciones ?? 0),
+    esFavorita: Boolean(fila.es_favorita ?? fila.esFavorita ?? 0),
+  };
+
+  if (incluirVectores && fila.vector_blob) {
+    cancion.vector = blobAVector(fila.vector_blob);
+  } else if (incluirVectores && Array.isArray(fila.vector)) {
+    cancion.vector = fila.vector;
+  }
+
+  return cancion;
+}
+
 /**
- * Guarda el catálogo completo con sus vectores numéricos dentro de SQLite (node:sqlite nativo)
- * y genera un respaldo JSON sincronizado para entornos serverless de solo lectura.
+ * Crea y puebla la tabla sencilla `canciones` en SQLite con metadatos musicales,
+ * letra, video de YouTube, contador de reproducciones, estado favorito y vector numérico.
  */
 export async function guardarCancionesVectorizadas(registros) {
   const { DatabaseSync } = await import("node:sqlite");
@@ -44,17 +63,24 @@ export async function guardarCancionesVectorizadas(registros) {
         artista TEXT NOT NULL,
         categoria TEXT NOT NULL,
         anio INTEGER NOT NULL,
+        portada TEXT NOT NULL,
+        youtube_id TEXT NOT NULL,
+        letra TEXT NOT NULL,
         mood TEXT NOT NULL,
         descripcion TEXT NOT NULL,
-        dimensiones INTEGER NOT NULL,
+        reproducciones INTEGER NOT NULL DEFAULT 0,
+        es_favorita INTEGER NOT NULL DEFAULT 0,
         vector_blob BLOB NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_canciones_categoria ON canciones(categoria);
+      CREATE INDEX IF NOT EXISTS idx_canciones_reproducciones ON canciones(reproducciones DESC);
     `);
 
     const insertStmt = db.prepare(`
-      INSERT INTO canciones (id, titulo, artista, categoria, anio, mood, descripcion, dimensiones, vector_blob)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO canciones (
+        id, titulo, artista, categoria, anio, portada, youtube_id,
+        letra, mood, descripcion, reproducciones, es_favorita, vector_blob
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.exec("BEGIN TRANSACTION;");
@@ -65,9 +91,13 @@ export async function guardarCancionesVectorizadas(registros) {
         item.artista,
         item.categoria,
         item.anio,
-        item.mood,
-        item.descripcion,
-        item.vector.length,
+        item.portada || "",
+        item.youtubeId || "",
+        item.letra || "",
+        item.mood || "",
+        item.descripcion || "",
+        Number(item.reproduccionesIniciales ?? 0),
+        0,
         vectorABlob(item.vector)
       );
     }
@@ -76,84 +106,109 @@ export async function guardarCancionesVectorizadas(registros) {
     db.close();
   }
 
-  // Respaldo compacto redondeado a 6 decimales por si algún contenedor en nube no habilita node:sqlite
   const respaldo = registros.map((item) => ({
     id: item.id,
     titulo: item.titulo,
     artista: item.artista,
     categoria: item.categoria,
     anio: item.anio,
-    mood: item.mood,
-    descripcion: item.descripcion,
-    dimensiones: item.vector.length,
+    portada: item.portada || "",
+    youtubeId: item.youtubeId || "",
+    letra: item.letra || "",
+    mood: item.mood || "",
+    descripcion: item.descripcion || "",
+    reproducciones: Number(item.reproduccionesIniciales ?? 0),
+    esFavorita: false,
     vector: Array.from(item.vector, (v) => Number(v.toFixed(6))),
   }));
   fs.writeFileSync(RUTA_CACHE_JSON, JSON.stringify(respaldo));
 }
 
 /**
- * Consulta las canciones (y opcionalmente sus vectores) desde SQLite usando consultas parametrizadas seguras.
+ * Consulta las canciones desde SQLite con filtro opcional por género/categoría.
  */
 export async function consultarCancionesSQLite({ categoria = "Todas", incluirVectores = false } = {}) {
-  const filtrarPorCategoria = Boolean(categoria && categoria !== "Todas");
+  const filtrar = Boolean(categoria && categoria !== "Todas");
 
   if (fs.existsSync(RUTA_SQLITE)) {
     try {
       const { DatabaseSync } = await import("node:sqlite");
       const db = new DatabaseSync(RUTA_SQLITE, { readOnly: true });
       try {
-        const columnas = incluirVectores
-          ? "id, titulo, artista, categoria, anio, mood, descripcion, dimensiones, vector_blob"
-          : "id, titulo, artista, categoria, anio, mood, descripcion, dimensiones";
+        const cols = incluirVectores
+          ? "id, titulo, artista, categoria, anio, portada, youtube_id, letra, mood, descripcion, reproducciones, es_favorita, vector_blob"
+          : "id, titulo, artista, categoria, anio, portada, youtube_id, letra, mood, descripcion, reproducciones, es_favorita";
 
-        const stmt = filtrarPorCategoria
-          ? db.prepare(`SELECT ${columnas} FROM canciones WHERE categoria = ? ORDER BY id ASC`)
-          : db.prepare(`SELECT ${columnas} FROM canciones ORDER BY id ASC`);
+        const stmt = filtrar
+          ? db.prepare(`SELECT ${cols} FROM canciones WHERE categoria = ? ORDER BY id ASC`)
+          : db.prepare(`SELECT ${cols} FROM canciones ORDER BY id ASC`);
 
-        const filas = filtrarPorCategoria ? stmt.all(categoria) : stmt.all();
-
-        const canciones = filas.map((fila) => {
-          const base = {
-            id: fila.id,
-            titulo: fila.titulo,
-            artista: fila.artista,
-            categoria: fila.categoria,
-            anio: fila.anio,
-            mood: fila.mood,
-            descripcion: fila.descripcion,
-            dimensiones: fila.dimensiones,
-          };
-          if (incluirVectores && fila.vector_blob) {
-            base.vector = blobAVector(fila.vector_blob);
-          }
-          return base;
-        });
-
-        return { motor: "sqlite-nativo", canciones, categorias: CATEGORIAS_MUSICALES };
+        const filas = filtrar ? stmt.all(categoria) : stmt.all();
+        const canciones = filas.map((f) => mapearFilaCancion(f, incluirVectores));
+        return { canciones, categorias: CATEGORIAS_MUSICALES };
       } finally {
         db.close();
       }
     } catch {
-      // Si el runtime en nube no soporta node:sqlite, cae de forma transparente al snapshot exportado de SQLite
+      // Respaldo automático en entornos serverless sin node:sqlite
     }
   }
 
   if (fs.existsSync(RUTA_CACHE_JSON)) {
     const crudo = JSON.parse(fs.readFileSync(RUTA_CACHE_JSON, "utf8"));
-    const filtradas = filtrarPorCategoria
-      ? crudo.filter((c) => c.categoria === categoria)
-      : crudo;
-
-    const canciones = filtradas.map((c) => {
-      const copia = { ...c };
-      if (!incluirVectores) {
-        delete copia.vector;
-      }
-      return copia;
-    });
-
-    return { motor: "sqlite-snapshot", canciones, categorias: CATEGORIAS_MUSICALES };
+    const filtradas = filtrar ? crudo.filter((c) => c.categoria === categoria) : crudo;
+    return {
+      canciones: filtradas.map((f) => mapearFilaCancion(f, incluirVectores)),
+      categorias: CATEGORIAS_MUSICALES,
+    };
   }
 
-  throw new Error("La base de datos vectorial aún no está inicializada. Ejecuta: npm run seed");
+  throw new Error("Base de datos musical no inicializada. Ejecuta: npm run seed");
+}
+
+/**
+ * Actualiza reproducciones/interacciones o favoritas directamente en SQLite cuando el disco es escribible.
+ */
+export async function registrarInteraccionSQLite({ id, accion }) {
+  const cancionId = Number(id);
+  if (!Number.isInteger(cancionId) || cancionId <= 0) {
+    throw new Error("ID de canción inválido.");
+  }
+
+  if (!fs.existsSync(RUTA_SQLITE)) {
+    return { actualizadoEnSQLite: false };
+  }
+
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(RUTA_SQLITE);
+    try {
+      db.exec("PRAGMA journal_mode = DELETE;");
+      if (accion === "play") {
+        db.prepare("UPDATE canciones SET reproducciones = reproducciones + 2 WHERE id = ?").run(cancionId);
+      } else if (accion === "letra") {
+        db.prepare("UPDATE canciones SET reproducciones = reproducciones + 1 WHERE id = ?").run(cancionId);
+      } else if (accion === "favorita_on") {
+        db.prepare("UPDATE canciones SET es_favorita = 1, reproducciones = reproducciones + 1 WHERE id = ?").run(cancionId);
+      } else if (accion === "favorita_off") {
+        db.prepare("UPDATE canciones SET es_favorita = 0 WHERE id = ?").run(cancionId);
+      }
+
+      const actualizada = db
+        .prepare(
+          "SELECT id, titulo, artista, categoria, anio, portada, youtube_id, letra, mood, descripcion, reproducciones, es_favorita FROM canciones WHERE id = ?"
+        )
+        .get(cancionId);
+
+      return {
+        actualizadoEnSQLite: true,
+        cancion: actualizada ? mapearFilaCancion(actualizada, false) : null,
+      };
+    } finally {
+      db.close();
+    }
+  } catch {
+    // En Vercel serverless el sistema de archivos es de solo lectura; el cliente sincroniza su estado local
+    return { actualizadoEnSQLite: false };
+  }
 }

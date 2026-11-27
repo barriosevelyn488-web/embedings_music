@@ -1,50 +1,26 @@
-# Embedings Music
+# Sonora · Aplicación Musical (`embedings_music`)
 
-Aplicación web ligera que demuestra el funcionamiento de **Embeddings vectoriales**, **similitud semántica (coseno)**, almacenamiento vectorial en **SQLite** (`node:sqlite`) y respuestas generadas por **Gemini IA** aplicadas a un buscador musical.
+Aplicación web para descubrir, gestionar y disfrutar música con reproducción integrada de videos de YouTube, lectura de letras completas, canciones más escuchadas dinámicas, apartado de favoritas, buscador inteligente por similitud semántica y asistente conversacional con avatar (**Lira**).
 
-## Qué demuestra este proyecto
+## Funcionalidades principales
 
-Partiendo del ejemplo base en consola (`mi-proyecto-ia`), este repositorio incorpora una interfaz visual en **HTML, CSS y JavaScript puro** junto con dos ajustes centrales en [`src/embeddings-engine.js`](./src/embeddings-engine.js):
+- **Buscador inteligente de canciones:** Permite buscar por canción, artista, género o estado de ánimo usando similitud semántica en segundo plano sin exponer tecnicismos en la interfaz.
+- **Filtrado por géneros musicales:** Acceso directo por categorías (*Pop*, *Rock / Alternativo*, *Urbano / Reggaetón / Hip-Hop*, *Balada / Acústica / Romántica*, *Electrónica / Dance*, *Salsa / Tropical / Regional*, *Cristiana / Gospel*, *Lo-Fi / Instrumental / Clásica*).
+- **Canciones más escuchadas en tiempo real:** La portada muestra el ranking de tendencias y actualiza los contadores conforme reproduces videos, consultas letras o guardas canciones.
+- **Apartado «Mis Favoritas»:** Guarda y gestiona tus temas preferidos con un clic.
+- **Reproductor de YouTube + Letra dentro de la app:** Modal integrado que reproduce el video oficial sin salir de la aplicación junto con la letra completa de cada canción.
+- **Chat con Avatar Musical (Lira):** Asistente independiente del buscador para resolver dudas sobre letras, historia de canciones, artistas o recibir recomendaciones con acceso directo para reproducir.
+- **Diseño cálido sin tonos azules:** Paleta de alto contraste en tonos **Carbón Vinilo, Crema Marfil, Coral Terracota y Ámbar Oro**, con selector de modo oscuro/claro cálido.
 
-1. **Ajuste 1 — Transformación de lenguaje natural a vector numérico y búsqueda en SQLite:**
-   - Convierte la frase del usuario en un vector de **3,072 dimensiones** con `gemini-embedding-2` (`crearEmbedding`).
-   - Consulta los vectores precalculados de las 32 canciones en [`data/music.sqlite`](./data/music.sqlite) (filtrando opcionalmente por cualquiera de las 8 categorías musicales) y calcula la **similitud de coseno** (`calcularSimilitud`).
-2. **Ajuste 2 — Respuesta de la IA orientada a curaduría musical:**
-   - Ajusta las instrucciones del sistema (`INSTRUCCIONES_MUSICA_IA`) y la función `generarRespuestaMusicalIA` para recomendar canciones y artistas basándose estrictamente en las coincidencias recuperadas de SQLite.
+## Cómo ejecutar en local
 
-## Estructura del proyecto
-
-```text
-embedings_music/
-├── api/
-│   ├── songs.js              # Endpoint GET /api/songs (catálogo y filtro SQLite)
-│   └── search.js             # Endpoint POST /api/search (embedding + similitud + respuesta IA)
-├── data/
-│   ├── songs-dataset.js      # Dataset semilla de 32 canciones en 8 categorías
-│   ├── music.sqlite          # Base de datos SQLite con los vectores binarios (Float32 BLOB)
-│   └── vectors-cache.json    # Respaldo sincronizado para runtimes serverless de solo lectura
-├── public/
-│   ├── index.html            # Interfaz de búsqueda, filtros, inspector vectorial y resultados
-│   ├── styles.css            # Estilos responsivos con Design Tokens y contraste accesible
-│   └── app.js                # Lógica cliente en JavaScript puro
-├── src/
-│   ├── db.js                 # Consultas parametrizadas sobre node:sqlite
-│   └── embeddings-engine.js  # Transformación de embeddings, similitud de coseno y curador IA
-├── seed.js                   # Script para regenerar data/music.sqlite si editas el dataset
-├── server.js                 # Servidor local ligero (http://localhost:3000)
-├── vercel.json               # Configuración lista para desplegar en Vercel
-└── .env.example              # Plantilla de variables de entorno
-```
-
-## Ejecución en local
-
-1. Instala las dependencias:
+1. Instala dependencias:
 
 ```bash
 npm install
 ```
 
-2. Abre tu archivo `.env` (o créalo desde `.env.example`) y coloca manualmente tu clave de Gemini sin comillas:
+2. Coloca tu clave en `.env` (a partir de `.env.example`):
 
 ```env
 GEMINI_API_KEY=AIzaSy...
@@ -57,14 +33,10 @@ PORT=3000
 npm start
 ```
 
-4. Abre en tu navegador: `http://localhost:3000`
-
-*(Opcional: si modificas o agregas canciones en `data/songs-dataset.js`, ejecuta `npm run seed` para volver a vectorizar y actualizar `data/music.sqlite`).*
+4. Abre en tu navegador: **`http://localhost:3000`**
 
 ## Despliegue en Vercel
 
-1. Sube o conecta este repositorio (`embedings_music`) desde tu panel de [Vercel](https://vercel.com/new).
-2. En **Environment Variables**, agrega:
-   - **Key:** `GEMINI_API_KEY`
-   - **Value:** tu API key de Google AI Studio
-3. Haz clic en **Deploy** (Vercel detecta automáticamente `public/` y las funciones serverless en `api/` junto con `data/music.sqlite`).
+1. Importa el repositorio **`barriosevelyn488-web/embedings_music`** en [vercel.com/new](https://vercel.com/new).
+2. Agrega `GEMINI_API_KEY` en **Environment Variables**.
+3. Haz clic en **Deploy**.

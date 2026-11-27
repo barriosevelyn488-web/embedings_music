@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import songsHandler from "./api/songs.js";
 import searchHandler from "./api/search.js";
+import interactHandler from "./api/interact.js";
+import chatHandler from "./api/chat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CARPETA_PUBLIC = path.join(__dirname, "public");
@@ -27,7 +29,6 @@ const ORIGENES_LOCALES_PERMITIDOS = new Set([
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
   const origin = req.headers.origin;
@@ -45,13 +46,10 @@ const server = http.createServer(async (req, res) => {
   const urlObj = new URL(req.url, `http://localhost:${PORT}`);
   const ruta = urlObj.pathname;
 
-  if (ruta === "/api/songs") {
-    return songsHandler(req, res);
-  }
-
-  if (ruta === "/api/search") {
-    return searchHandler(req, res);
-  }
+  if (ruta === "/api/songs") return songsHandler(req, res);
+  if (ruta === "/api/search") return searchHandler(req, res);
+  if (ruta === "/api/interact") return interactHandler(req, res);
+  if (ruta === "/api/chat") return chatHandler(req, res);
 
   const rutaRelativa = ruta === "/" ? "index.html" : ruta.replace(/^\/+/, "");
   const rutaArchivo = path.normalize(path.join(CARPETA_PUBLIC, rutaRelativa));
@@ -73,7 +71,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🎵 Servidor embedings_music activo en: http://localhost:${PORT}`);
-  console.log("   - Catálogo SQLite: GET  /api/songs");
-  console.log("   - Búsqueda IA:     POST /api/search\n");
+  console.log(`\n🎵 Aplicación musical activa en: http://localhost:${PORT}\n`);
 });

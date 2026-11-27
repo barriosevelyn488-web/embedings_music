@@ -1,70 +1,86 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Embedings Music · Buscador Semántico Musical con SQLite</title>
+    <title>Sonora · Tu Espacio Musical</title>
     <meta
       name="description"
-      content="Buscador musical impulsado por Embeddings vectoriales en SQLite y Gemini IA para demostrar similitud semántica por artista, canción, género y emociones."
+      content="Explora tu música favorita, reproduce videos oficiales, lee letras completas y descubre recomendaciones personalizadas."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="ambient-glow ambient-glow--one" aria-hidden="true"></div>
-    <div class="ambient-glow ambient-glow--two" aria-hidden="true"></div>
-
-    <header class="site-header">
-      <div class="container header-inner">
-        <div class="brand">
-          <div class="brand-icon" aria-hidden="true">
-            <span class="eq-bar eq-1"></span>
-            <span class="eq-bar eq-2"></span>
-            <span class="eq-bar eq-3"></span>
-            <span class="eq-bar eq-4"></span>
+    <div class="app-shell">
+      <!-- Barra lateral de navegación musical -->
+      <aside class="sidebar" aria-label="Navegación principal">
+        <div class="sidebar__brand">
+          <div class="vinyl-logo" aria-hidden="true">
+            <div class="vinyl-logo__center"></div>
           </div>
           <div>
-            <p class="eyebrow">Base Vectorial SQLite · Gemini Embedding 2</p>
-            <h1 class="brand-title">Embedings Music</h1>
+            <span class="brand-name">Sonora</span>
+            <span class="brand-tagline">Música, video y letra</span>
           </div>
         </div>
 
-        <div id="statusBadge" class="status-badge" role="status" aria-live="polite">
-          <span class="status-dot"></span>
-          <span id="statusText">Conectando con SQLite...</span>
-        </div>
-      </div>
-    </header>
+        <nav class="sidebar__nav">
+          <button type="button" id="navHomeBtn" class="nav-item is-active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+            <span>Explorar música</span>
+          </button>
 
-    <main class="container main-content">
-      <!-- Caja principal de consulta semántica -->
-      <section class="search-panel" aria-labelledby="searchHeading">
-        <div class="search-panel__intro">
-          <h2 id="searchHeading">Encuentra música por significado, artista o canción</h2>
-          <p>
-            Escribe en lenguaje natural qué quieres escuchar. Tu frase se transforma en un
-            <strong>vector numérico de 3,072 dimensiones</strong> y se compara por similitud de coseno contra
-            nuestra base de datos <strong>SQLite</strong>.
-          </p>
+          <button type="button" id="navFavoritesBtn" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path
+                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+              ></path>
+            </svg>
+            <span>Mis favoritas</span>
+            <span id="favCountBadge" class="count-pill">0</span>
+          </button>
+        </nav>
+
+        <div class="sidebar__genres">
+          <p class="sidebar__section-title">Géneros</p>
+          <div id="sidebarGenresList" class="sidebar__genres-list"></div>
         </div>
 
-        <form id="searchForm" class="search-form" novalidate>
-          <label for="searchInput" class="sr-only">
-            Buscar por canción, artista, emoción o momento
-          </label>
-          <div class="search-input-wrap">
+        <div class="sidebar__footer">
+          <button type="button" id="themeToggleBtn" class="theme-btn" aria-label="Cambiar contraste de color">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"></circle>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+            </svg>
+            <span id="themeToggleText">Modo crema cálido</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Área principal -->
+      <div class="workspace">
+        <!-- Barra superior con Buscador -->
+        <header class="topbar">
+          <form id="searchForm" class="search-bar" novalidate>
+            <label for="searchInput" class="sr-only">
+              Buscar por canción, artista, género o ambiente
+            </label>
             <svg
-              class="search-icon"
+              class="search-bar__icon"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2"
+              stroke-width="2.2"
               aria-hidden="true"
             >
               <circle cx="11" cy="11" r="8"></circle>
@@ -75,150 +91,230 @@
               type="search"
               maxlength="300"
               autocomplete="off"
-              placeholder="Ej: música suave sin letra para concentrarme programando, o algo de Juan Luis Guerra..."
+              placeholder="Busca por canción, artista, género o qué ambiente quieres escuchar..."
             />
             <button
               type="button"
               id="clearSearchBtn"
-              class="clear-btn hidden"
-              aria-label="Limpiar consulta"
-              title="Limpiar consulta"
+              class="search-bar__clear hidden"
+              aria-label="Limpiar búsqueda"
             >
-              Limpiar
+              ✕
+            </button>
+            <button type="submit" id="searchSubmitBtn" class="search-bar__submit">
+              Buscar
+            </button>
+          </form>
+        </header>
+
+        <main class="content-area">
+          <div id="toastAlert" class="alert-banner hidden" role="alert"></div>
+
+          <!-- Sección: Recomendaciones / Más Escuchadas (se actualiza con la interacción) -->
+          <section id="trendingSection" class="trending-section" aria-labelledby="trendingHeading">
+            <div class="section-head">
+              <div class="section-head__title-group">
+                <span class="section-kicker">Tendencias para ti</span>
+                <h2 id="trendingHeading">Canciones más escuchadas</h2>
+              </div>
+              <p class="section-hint">Se actualiza según las canciones que reproduces y exploras</p>
+            </div>
+
+            <div id="trendingGrid" class="trending-grid"></div>
+          </section>
+
+          <!-- Filtros rápidos por género -->
+          <section class="filter-strip" aria-label="Filtrar canciones por género">
+            <div id="genreChipsContainer" class="genre-chips"></div>
+          </section>
+
+          <!-- Listado principal de canciones (Catálogo / Resultados de búsqueda / Favoritas) -->
+          <section class="songs-section" aria-labelledby="songsSectionHeading">
+            <div class="section-head">
+              <div>
+                <h2 id="songsSectionHeading">Todas las canciones</h2>
+                <p id="songsSectionSubtitle" class="section-subtitle">
+                  Selecciona cualquier tema para reproducir su video o leer la letra completa.
+                </p>
+              </div>
+              <button type="button" id="backToAllBtn" class="outline-btn hidden">
+                Mostrar todo
+              </button>
+            </div>
+
+            <div id="searchLoading" class="loading-row hidden" aria-live="polite">
+              <span class="pulse-disc" aria-hidden="true"></span>
+              <span>Buscando las canciones que mejor encajan...</span>
+            </div>
+
+            <div id="emptySongsState" class="empty-box hidden">
+              <div class="empty-box__icon" aria-hidden="true">♪</div>
+              <h3 id="emptyTitle">Aún no hay canciones aquí</h3>
+              <p id="emptyMessage">Explora el catálogo y toca el corazón ♥ para guardar tus favoritas.</p>
+            </div>
+
+            <div id="songsGrid" class="songs-grid"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Modal Reproductor de Video de YouTube + Letra dentro de la App -->
+    <div id="playerModal" class="player-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalSongTitle">
+      <div id="playerModalBackdrop" class="player-modal__backdrop"></div>
+      <div class="player-modal__dialog">
+        <div class="player-modal__topbar">
+          <div class="player-modal__song-meta">
+            <img id="modalCoverImg" src="" alt="" class="player-modal__thumb" />
+            <div>
+              <span id="modalGenreBadge" class="genre-pill"></span>
+              <h2 id="modalSongTitle">Título</h2>
+              <p id="modalSongArtist">Artista</p>
+            </div>
+          </div>
+
+          <div class="player-modal__actions">
+            <span id="modalPlaysCounter" class="plays-badge"></span>
+            <button type="button" id="modalFavBtn" class="fav-action-btn" aria-label="Guardar en favoritas">
+              <span id="modalFavIcon" aria-hidden="true">♡</span>
+              <span id="modalFavLabel">Favorita</span>
+            </button>
+            <button type="button" id="modalAskAiBtn" class="ask-song-btn">
+              Preguntarle a Lira
+            </button>
+            <button type="button" id="closeModalBtn" class="close-icon-btn" aria-label="Cerrar reproductor">
+              ✕
             </button>
           </div>
+        </div>
 
-          <button type="submit" id="submitBtn" class="primary-btn">
-            <span id="submitBtnLabel">Buscar con IA</span>
+        <div class="player-modal__body">
+          <!-- Columna Video YouTube -->
+          <div class="video-pane">
+            <div class="video-frame-wrap">
+              <iframe
+                id="youtubeIframe"
+                title="Reproductor de video musical"
+                src=""
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <div class="video-pane__footer">
+              <p id="modalMoodDesc" class="video-pane__desc"></p>
+              <a
+                id="externalYoutubeLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="yt-external-link"
+              >
+                Abrir en YouTube ↗
+              </a>
+            </div>
+          </div>
+
+          <!-- Columna Letra Completa -->
+          <div class="lyrics-pane">
+            <div class="lyrics-pane__header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+              <h3>Letra de la canción</h3>
+            </div>
+            <div id="modalLyricsContent" class="lyrics-pane__scroll"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botón flotante y Ventana de Chat con Avatar Musical ("Lira") -->
+    <div class="avatar-widget">
+      <section
+        id="chatPanel"
+        class="chat-panel hidden"
+        aria-label="Chat con Lira, asistente musical"
+      >
+        <header class="chat-panel__header">
+          <div class="chat-panel__identity">
+            <div class="lira-avatar" aria-hidden="true">
+              <svg viewBox="0 0 64 64" fill="none">
+                <circle cx="32" cy="32" r="30" fill="#2A1F1B" />
+                <path d="M14 33C14 21.954 22.059 13 32 13C41.941 13 50 21.954 50 33" stroke="#FF5A36" stroke-width="5" stroke-linecap="round"/>
+                <rect x="10" y="29" width="8" height="14" rx="4" fill="#FF5A36"/>
+                <rect x="46" y="29" width="8" height="14" rx="4" fill="#FF5A36"/>
+                <circle cx="32" cy="35" r="14" fill="#F6D5B8"/>
+                <path d="M20 30C22 21 42 21 44 30C40 26 24 26 20 30Z" fill="#3B231A"/>
+                <circle cx="27" cy="35" r="2.1" fill="#1F1613"/>
+                <circle cx="37" cy="35" r="2.1" fill="#1F1613"/>
+                <path d="M27.5 41.5C29.5 44 34.5 44 36.5 41.5" stroke="#C84B31" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <h3>Lira · Guía Musical</h3>
+              <p>Pregúntame sobre canciones, letras o artistas</p>
+            </div>
+          </div>
+          <button type="button" id="closeChatBtn" class="close-icon-btn" aria-label="Cerrar chat">
+            ✕
+          </button>
+        </header>
+
+        <div id="chatMessages" class="chat-panel__messages" aria-live="polite"></div>
+
+        <div class="chat-panel__suggestions">
+          <button type="button" class="chat-QuickBtn" data-question="¿Qué canción alegre me recomiendas para bailar?">
+            Algo alegre para bailar
+          </button>
+          <button type="button" class="chat-QuickBtn" data-question="¿De qué trata la letra de Viva La Vida?">
+            Historia de Viva La Vida
+          </button>
+          <button type="button" class="chat-QuickBtn" data-question="Recomiéndame música tranquila para concentrarme">
+            Música tranquila
+          </button>
+        </div>
+
+        <form id="chatForm" class="chat-panel__form" novalidate>
+          <label for="chatInput" class="sr-only">Escribe tu pregunta musical</label>
+          <input
+            id="chatInput"
+            type="text"
+            maxlength="400"
+            autocomplete="off"
+            placeholder="Pregúntale a Lira sobre una canción o artista..."
+          />
+          <button type="submit" id="chatSendBtn" class="chat-send-btn" aria-label="Enviar mensaje">
+            Enviar
           </button>
         </form>
-
-        <div class="quick-prompts" aria-label="Ejemplos de consultas semánticas">
-          <span class="quick-prompts__label">Prueba rápida:</span>
-          <button
-            type="button"
-            class="prompt-chip"
-            data-query="Música suave sin letra para estudiar o programar concentrado de noche"
-          >
-            Estudiar sin letra
-          </button>
-          <button
-            type="button"
-            class="prompt-chip"
-            data-query="Canciones alegres de fiesta latina para bailar y levantar el ánimo"
-          >
-            Fiesta latina para bailar
-          </button>
-          <button
-            type="button"
-            class="prompt-chip"
-            data-query="Canciones tristes para superar una ruptura o desamor con piano"
-          >
-            Desamor y nostalgia
-          </button>
-          <button
-            type="button"
-            class="prompt-chip"
-            data-query="Música de fe, paz espiritual, gratitud y esperanza en momentos difíciles"
-          >
-            Fe y paz interior
-          </button>
-          <button
-            type="button"
-            class="prompt-chip"
-            data-query="Canciones con mucha energía y adrenalina para entrenar en el gimnasio"
-          >
-            Energía para entrenar
-          </button>
-        </div>
-
-        <!-- Filtro por categorías / géneros -->
-        <div class="categories-bar">
-          <span class="categories-bar__label" id="categoriesLabel">Filtrar por categoría en SQLite:</span>
-          <div
-            id="categoriesContainer"
-            class="categories-list"
-            role="group"
-            aria-labelledby="categoriesLabel"
-          ></div>
-        </div>
       </section>
 
-      <!-- Estado de error o aviso de API Key -->
-      <section id="alertBox" class="alert-box hidden" role="alert" aria-live="assertive">
-        <div class="alert-box__title" id="alertTitle">Aviso</div>
-        <p class="alert-box__message" id="alertMessage"></p>
-      </section>
-
-      <!-- Estado de carga durante transformación vectorial -->
-      <section id="loadingSection" class="loading-card hidden" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <div>
-          <h3>Transformando tu consulta en vector numérico...</h3>
-          <p>
-            Generando embedding en Gemini, comparando similitud de coseno en SQLite y redactando recomendación musical.
-          </p>
-        </div>
-      </section>
-
-      <!-- Panel de resultados IA + Inspector de transformación vectorial -->
-      <section id="aiResponseSection" class="ai-results-grid hidden" aria-live="polite">
-        <article class="curator-card">
-          <div class="curator-card__header">
-            <span class="pill pill--accent">Curador Musical IA</span>
-            <span id="responseMeta" class="meta-mono"></span>
-          </div>
-          <h3 class="curator-card__title">Recomendación basada en similitud semántica</h3>
-          <p id="aiResponseText" class="curator-card__body"></p>
-        </article>
-
-        <aside class="vector-card" aria-label="Detalle de transformación del embedding">
-          <div class="vector-card__header">
-            <span class="pill pill--mono">Transformación del Embedding</span>
-            <span id="vectorDimsBadge" class="meta-mono"></span>
-          </div>
-          <p class="vector-card__desc">
-            Así procesó la IA tu frase en lenguaje natural a coordenadas numéricas antes de comparar contra SQLite:
-          </p>
-          <div class="vector-bars" id="vectorBars" aria-hidden="true"></div>
-          <pre id="vectorPreview" class="vector-code"></pre>
-          <div class="vector-stats">
-            <span id="vectorCompareCount"></span>
-            <span id="vectorSqliteTime"></span>
-          </div>
-        </aside>
-      </section>
-
-      <!-- Listado de canciones (resultados ordenados por similitud o catálogo SQLite filtrado) -->
-      <section class="catalog-section" aria-labelledby="catalogHeading">
-        <div class="catalog-header">
-          <div>
-            <h2 id="catalogHeading">Catálogo en Base de Datos SQLite</h2>
-            <p id="catalogSubtitle" class="catalog-subtitle">
-              Explora las canciones almacenadas como vectores o realiza una búsqueda arriba para ordenarlas por similitud semántica.
-            </p>
-          </div>
-          <button type="button" id="resetViewBtn" class="ghost-btn hidden">
-            Ver todo el catálogo
-          </button>
-        </div>
-
-        <div id="emptyState" class="empty-state hidden">
-          <p>No se encontraron canciones para esta combinación. Prueba cambiar la categoría a «Todas».</p>
-        </div>
-
-        <div id="songsGrid" class="songs-grid"></div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="container footer-inner">
-        <p>
-          <strong>Embedings Music</strong> · Ejemplo práctico de búsqueda vectorial con
-          <code>node:sqlite</code>, similitud de coseno y <code>@google/genai</code>.
-        </p>
-      </div>
-    </footer>
+      <button
+        type="button"
+        id="openChatFab"
+        class="avatar-fab"
+        aria-expanded="false"
+        aria-controls="chatPanel"
+      >
+        <span class="avatar-fab__face" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" fill="#1D1613" />
+            <path d="M14 33C14 21.954 22.059 13 32 13C41.941 13 50 21.954 50 33" stroke="#FF5A36" stroke-width="5" stroke-linecap="round"/>
+            <rect x="10" y="29" width="8" height="14" rx="4" fill="#FF5A36"/>
+            <rect x="46" y="29" width="8" height="14" rx="4" fill="#FF5A36"/>
+            <circle cx="32" cy="35" r="14" fill="#F6D5B8"/>
+            <path d="M20 30C22 21 42 21 44 30C40 26 24 26 20 30Z" fill="#3B231A"/>
+            <circle cx="27" cy="35" r="2.1" fill="#1F1613"/>
+            <circle cx="37" cy="35" r="2.1" fill="#1F1613"/>
+            <path d="M27.5 41.5C29.5 44 34.5 44 36.5 41.5" stroke="#C84B31" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="avatar-fab__label">Pregúntale a Lira</span>
+      </button>
+    </div>
 
     <script type="module" src="./app.js"></script>
   </body>
