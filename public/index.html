@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embedings Music · Buscador Semántico Musical con SQLite</title>
+    <meta
+      name="description"
+      content="Buscador musical impulsado por Embeddings vectoriales en SQLite y Gemini IA para demostrar similitud semántica por artista, canción, género y emociones."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient-glow ambient-glow--one" aria-hidden="true"></div>
+    <div class="ambient-glow ambient-glow--two" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <span class="eq-bar eq-1"></span>
+            <span class="eq-bar eq-2"></span>
+            <span class="eq-bar eq-3"></span>
+            <span class="eq-bar eq-4"></span>
+          </div>
+          <div>
+            <p class="eyebrow">Base Vectorial SQLite · Gemini Embedding 2</p>
+            <h1 class="brand-title">Embedings Music</h1>
+          </div>
+        </div>
+
+        <div id="statusBadge" class="status-badge" role="status" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="statusText">Conectando con SQLite...</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="container main-content">
+      <!-- Caja principal de consulta semántica -->
+      <section class="search-panel" aria-labelledby="searchHeading">
+        <div class="search-panel__intro">
+          <h2 id="searchHeading">Encuentra música por significado, artista o canción</h2>
+          <p>
+            Escribe en lenguaje natural qué quieres escuchar. Tu frase se transforma en un
+            <strong>vector numérico de 3,072 dimensiones</strong> y se compara por similitud de coseno contra
+            nuestra base de datos <strong>SQLite</strong>.
+          </p>
+        </div>
+
+        <form id="searchForm" class="search-form" novalidate>
+          <label for="searchInput" class="sr-only">
+            Buscar por canción, artista, emoción o momento
+          </label>
+          <div class="search-input-wrap">
+            <svg
+              class="search-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              id="searchInput"
+              type="search"
+              maxlength="300"
+              autocomplete="off"
+              placeholder="Ej: música suave sin letra para concentrarme programando, o algo de Juan Luis Guerra..."
+            />
+            <button
+              type="button"
+              id="clearSearchBtn"
+              class="clear-btn hidden"
+              aria-label="Limpiar consulta"
+              title="Limpiar consulta"
+            >
+              Limpiar
+            </button>
+          </div>
+
+          <button type="submit" id="submitBtn" class="primary-btn">
+            <span id="submitBtnLabel">Buscar con IA</span>
+          </button>
+        </form>
+
+        <div class="quick-prompts" aria-label="Ejemplos de consultas semánticas">
+          <span class="quick-prompts__label">Prueba rápida:</span>
+          <button
+            type="button"
+            class="prompt-chip"
+            data-query="Música suave sin letra para estudiar o programar concentrado de noche"
+          >
+            Estudiar sin letra
+          </button>
+          <button
+            type="button"
+            class="prompt-chip"
+            data-query="Canciones alegres de fiesta latina para bailar y levantar el ánimo"
+          >
+            Fiesta latina para bailar
+          </button>
+          <button
+            type="button"
+            class="prompt-chip"
+            data-query="Canciones tristes para superar una ruptura o desamor con piano"
+          >
+            Desamor y nostalgia
+          </button>
+          <button
+            type="button"
+            class="prompt-chip"
+            data-query="Música de fe, paz espiritual, gratitud y esperanza en momentos difíciles"
+          >
+            Fe y paz interior
+          </button>
+          <button
+            type="button"
+            class="prompt-chip"
+            data-query="Canciones con mucha energía y adrenalina para entrenar en el gimnasio"
+          >
+            Energía para entrenar
+          </button>
+        </div>
+
+        <!-- Filtro por categorías / géneros -->
+        <div class="categories-bar">
+          <span class="categories-bar__label" id="categoriesLabel">Filtrar por categoría en SQLite:</span>
+          <div
+            id="categoriesContainer"
+            class="categories-list"
+            role="group"
+            aria-labelledby="categoriesLabel"
+          ></div>
+        </div>
+      </section>
+
+      <!-- Estado de error o aviso de API Key -->
+      <section id="alertBox" class="alert-box hidden" role="alert" aria-live="assertive">
+        <div class="alert-box__title" id="alertTitle">Aviso</div>
+        <p class="alert-box__message" id="alertMessage"></p>
+      </section>
+
+      <!-- Estado de carga durante transformación vectorial -->
+      <section id="loadingSection" class="loading-card hidden" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+          <h3>Transformando tu consulta en vector numérico...</h3>
+          <p>
+            Generando embedding en Gemini, comparando similitud de coseno en SQLite y redactando recomendación musical.
+          </p>
+        </div>
+      </section>
+
+      <!-- Panel de resultados IA + Inspector de transformación vectorial -->
+      <section id="aiResponseSection" class="ai-results-grid hidden" aria-live="polite">
+        <article class="curator-card">
+          <div class="curator-card__header">
+            <span class="pill pill--accent">Curador Musical IA</span>
+            <span id="responseMeta" class="meta-mono"></span>
+          </div>
+          <h3 class="curator-card__title">Recomendación basada en similitud semántica</h3>
+          <p id="aiResponseText" class="curator-card__body"></p>
+        </article>
+
+        <aside class="vector-card" aria-label="Detalle de transformación del embedding">
+          <div class="vector-card__header">
+            <span class="pill pill--mono">Transformación del Embedding</span>
+            <span id="vectorDimsBadge" class="meta-mono"></span>
+          </div>
+          <p class="vector-card__desc">
+            Así procesó la IA tu frase en lenguaje natural a coordenadas numéricas antes de comparar contra SQLite:
+          </p>
+          <div class="vector-bars" id="vectorBars" aria-hidden="true"></div>
+          <pre id="vectorPreview" class="vector-code"></pre>
+          <div class="vector-stats">
+            <span id="vectorCompareCount"></span>
+            <span id="vectorSqliteTime"></span>
+          </div>
+        </aside>
+      </section>
+
+      <!-- Listado de canciones (resultados ordenados por similitud o catálogo SQLite filtrado) -->
+      <section class="catalog-section" aria-labelledby="catalogHeading">
+        <div class="catalog-header">
+          <div>
+            <h2 id="catalogHeading">Catálogo en Base de Datos SQLite</h2>
+            <p id="catalogSubtitle" class="catalog-subtitle">
+              Explora las canciones almacenadas como vectores o realiza una búsqueda arriba para ordenarlas por similitud semántica.
+            </p>
+          </div>
+          <button type="button" id="resetViewBtn" class="ghost-btn hidden">
+            Ver todo el catálogo
+          </button>
+        </div>
+
+        <div id="emptyState" class="empty-state hidden">
+          <p>No se encontraron canciones para esta combinación. Prueba cambiar la categoría a «Todas».</p>
+        </div>
+
+        <div id="songsGrid" class="songs-grid"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <p>
+          <strong>Embedings Music</strong> · Ejemplo práctico de búsqueda vectorial con
+          <code>node:sqlite</code>, similitud de coseno y <code>@google/genai</code>.
+        </p>
+      </div>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
